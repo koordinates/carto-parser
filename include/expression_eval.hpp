@@ -33,7 +33,7 @@ struct expression {
     
     inline bool is_color(utree const& ut)
     {
-        return get_node_type(ut) == exp_color;
+        return ut.which() == spirit::utree_type::list_type;
     }
     
     inline bool is_double(utree const& ut)

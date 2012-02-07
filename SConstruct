@@ -37,15 +37,15 @@ env = Environment(
 # check environ
 if 'CXX' in os.environ:
     env.Replace(CXX=os.environ['CXX'])
-    print("%sconfigure: using CXX: %s%s" % (colors['blue'], os.environ['CXX'], colors['end']))
+    print("%sconfigure: using CXX=%s%s" % (colors['blue'], os.environ['CXX'], colors['end']))
 
 if 'CXXFLAGS' in os.environ:
     env.Append(CXXFLAGS=os.environ['CXXFLAGS'])
-    print("%sconfigure: using CXXFLAGS: %s%s" % (colors['blue'], os.environ['CXXFLAGS'], colors['end']))
+    print("%sconfigure: using CXXFLAGS=%s%s" % (colors['blue'], os.environ['CXXFLAGS'], colors['end']))
 
 if 'LDFLAGS' in os.environ:
     env.Append(LINKFLAGS=os.environ['LDFLAGS'])
-    print("%sconfigure: using LDFLAGS: %s%s" % (colors['blue'], os.environ['LDFLAGS'], colors['end']))
+    print("%sconfigure: using LDFLAGS=%s%s" % (colors['blue'], os.environ['LDFLAGS'], colors['end']))
 
 def _mapnik_config(*args):
     (output, _) = subprocess.Popen(('mapnik-config',) + args, stdout=subprocess.PIPE).communicate()

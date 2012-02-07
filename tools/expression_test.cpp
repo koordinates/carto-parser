@@ -18,7 +18,7 @@
 
 #include <iostream>
 #include <string>
-
+#include <exception>
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -42,14 +42,20 @@ int main()
             break;
         
         typedef carto::position_iterator<std::string::const_iterator> iter;
-        carto::parse_tree tree = carto::build_parse_tree< carto::expression_parser<iter> >(str);
+        try
+        {
+            carto::parse_tree tree = carto::build_parse_tree< carto::expression_parser<iter> >(str);
         
-        utree ut = tree.ast();
+            utree ut = tree.ast();
         
-        std::cout << "AST: "<< ut << "\n";
-        
-        carto::expression exp(tree.ast(), tree.annotations(), carto::style_env());
-        std::cout << "Result: " << exp.eval() << "\n\n";
+            std::cout << "AST: "<< ut << "\n";    
+            carto::expression exp(tree.ast(), tree.annotations(), carto::style_env());
+            std::cout << "Result: " << exp.eval() << "\n\n";
+        }
+        catch(std::exception const& e)
+        {
+            std::cout << "Exception: " << e.what() << "\n";
+        }
     }
 
     std::cout << "Bye... :-) \n\n";

@@ -33,7 +33,7 @@ struct expression {
     
     inline bool is_color(utree const& ut)
     {
-        return ut.which() == spirit::utree_type::list_type;
+        return get_node_type(ut) == exp_color;
     }
     
     inline bool is_double(utree const& ut)
@@ -51,49 +51,12 @@ struct expression {
     
     utree fix_color_range(utree const& node);
 
-#define EVAL_OP(name, op)                                                            \
-    utree eval_##name(utree const& lhs, utree const& rhs)                            \
-    {                                                                                \
-        typedef utree::const_iterator iter;                                          \
-        utree ut;                                                                    \
-                                                                                     \
-        if ( is_color(lhs) && is_color(rhs) ) {                                      \
-            iter lhs_it  = lhs.begin(),                                              \
-                 rhs_it  = rhs.begin();                                              \
-                                                                                     \
-            ut.tag(lhs.tag());                                                       \
-            for(; lhs_it != lhs.end() && rhs_it != rhs.end(); lhs_it++, rhs_it++)    \
-                ut.push_back( as<double>(*lhs_it) op as<double>(*rhs_it) );          \
-                                                                                     \
-        } else if ( is_double(lhs) && is_color(rhs) ) {                              \
-            iter rhs_it  = rhs.begin();                                              \
-            double d = as<double>(lhs);                                              \
-                                                                                     \
-            ut.tag(rhs.tag());                                                       \
-            for(; rhs_it != rhs.end(); rhs_it++)                                     \
-                ut.push_back( d op as<double>(*rhs_it) );                            \
-                                                                                     \
-        } else if ( is_color(lhs) && is_double(rhs) ) {                              \
-            iter lhs_it  = lhs.begin();                                              \
-            double d = as<double>(rhs);                                              \
-                                                                                     \
-            ut.tag(lhs.tag());                                                       \
-            for(; lhs_it != lhs.end(); lhs_it++)                                     \
-                ut.push_back( d op as<double>(*lhs_it) );                            \
-                                                                                     \
-        } else {                                                                     \
-            ut = lhs op rhs;                                                         \
-        }                                                                            \
-                                                                                     \
-        return (get_node_type(ut) == exp_color) ? fix_color_range(ut) : ut;          \
-    }                                                                                \
-    /***/
-
-    EVAL_OP(add, +);
-    EVAL_OP(sub, -);
-    EVAL_OP(mult, *);
-    EVAL_OP(div, /);
-
+#define EVAL_OP_PROTO(name, op) utree eval_##name(utree const& lhs, utree const& rhs)
+    EVAL_OP_PROTO(add, +);
+    EVAL_OP_PROTO(sub, -);
+    EVAL_OP_PROTO(mult, *);
+    EVAL_OP_PROTO(div, /);
+#undef EVAL_OP_PROTO
 };
 
 }

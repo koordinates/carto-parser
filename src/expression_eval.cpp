@@ -4,6 +4,8 @@
 #include <parse/annotator.hpp>
 #include <parse/carto_grammar.hpp>
 
+#include <algorithm>
+
 namespace carto {
 
 using mapnik::config_error;
@@ -31,7 +33,7 @@ utree expression::eval()
 
 utree expression::eval_var(utree const& node) {
     std::string key = as<std::string>(node);
-    
+    std::clog << key << std::endl;
     utree value = env.vars.lookup(key);
     
     if (value == utree::nil_type()) {
@@ -45,8 +47,7 @@ utree expression::eval_var(utree const& node) {
 }
 
 utree expression::eval_node(utree const& node)
-{
-    
+{   
     //std::cout << node << " " << node.which() << " " << get_node_type(node) << "\n";
     
     if (node.which() == spirit::utree_type::double_type) {
@@ -56,7 +57,6 @@ utree expression::eval_node(utree const& node)
             case exp_plus:
                 BOOST_ASSERT(node.size()==2);
                 return eval_add( eval_node(node.front()), eval_node(node.back()) );
-                //return eval_node(node.front())+eval_node(node.back());
             case exp_minus:
                 BOOST_ASSERT(node.size()==2);
                 return eval_sub( eval_node(node.front()), eval_node(node.back()) );
@@ -75,8 +75,6 @@ utree expression::eval_node(utree const& node)
             case exp_color:
                 BOOST_ASSERT(node.size()==4);
                 return node;
-            case exp_var:
-                return eval_var(node);
             default:
             {
                 std::stringstream out;
@@ -86,6 +84,9 @@ utree expression::eval_node(utree const& node)
             }
         }
     } else {
+        if(get_node_type(node) == exp_var)
+            return eval_var(node);
+
         std::cout << "Shouldn't be here!\n";
     }
     
@@ -170,10 +171,52 @@ utree expression::fix_color_range(utree const& node)
     
     utree ut;
     for(iter it = node.begin(); it != node.end(); it++)
-        ut.push_back( fmod(as<double>(*it), 256) );
+        ut.push_back( std::max(std::min(as<double>(*it), 255.0), 0.0) );
+    ut.tag(node.tag());
     
     return ut;
 }
 
+#define EVAL_OP(name, op)                                                        \
+utree expression::eval_##name(utree const& lhs, utree const& rhs)                \
+{                                                                                \
+    typedef utree::const_iterator iter;                                          \
+    utree ut;                                                                    \
+                                                                                 \
+    if ( is_color(lhs) && is_color(rhs) ) {                                      \
+        iter lhs_it  = lhs.begin(),                                              \
+             rhs_it  = rhs.begin();                                              \
+                                                                                 \
+        ut.tag(lhs.tag());                                                       \
+        for(; lhs_it != lhs.end() && rhs_it != rhs.end(); lhs_it++, rhs_it++)    \
+            ut.push_back( as<double>(*lhs_it) op as<double>(*rhs_it) );          \
+                                                                                 \
+    } else if ( is_double(lhs) && is_color(rhs) ) {                              \
+        iter rhs_it  = rhs.begin();                                              \
+        double d = as<double>(lhs);                                              \
+                                                                                 \
+        ut.tag(rhs.tag());                                                       \
+        for(; rhs_it != rhs.end(); rhs_it++)                                     \
+            ut.push_back( d op as<double>(*rhs_it) );                            \
+                                                                                 \
+    } else if ( is_color(lhs) && is_double(rhs) ) {                              \
+        iter lhs_it  = lhs.begin();                                              \
+        double d = as<double>(rhs);                                              \
+                                                                                 \
+        ut.tag(lhs.tag());                                                       \
+        for(; lhs_it != lhs.end(); lhs_it++)                                     \
+            ut.push_back( d op as<double>(*lhs_it) );                            \
+                                                                                 \
+    } else {                                                                     \
+        ut = lhs op rhs;                                                         \
+    }                                                                            \
+                                                                                 \
+    return (get_node_type(ut) == exp_color) ? fix_color_range(ut) : ut;          \
+}
+EVAL_OP(add, +)
+EVAL_OP(sub, -)
+EVAL_OP(mult, *)
+EVAL_OP(div, /)
+#undef EVAL_OP
 
 }

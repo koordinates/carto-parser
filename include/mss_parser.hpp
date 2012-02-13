@@ -131,7 +131,6 @@ struct mss_parser {
     
     bool parse_text(mapnik::Map& map, mapnik::rule& rule, std::string const& key, utree const& value, style_env const& env);
     
-    
     bool parse_shield(mapnik::rule& rule, std::string const& key, utree const& value, style_env const& env);
     
     void parse_variable(utree const& node, style_env& env);
@@ -143,4 +142,4 @@ struct mss_parser {
 mss_parser load_mss(std::string filename, bool strict);
 
 }
-#endif 
+#endif

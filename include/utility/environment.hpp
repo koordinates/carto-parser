@@ -9,7 +9,9 @@
 #define ENVIRONMENT_H
 
 #include <boost/spirit/include/support_utree.hpp>
-#include <boost/unordered_map.hpp>
+#include <vector>
+
+#include <mapnik/rule.hpp>
 
 namespace carto {
 

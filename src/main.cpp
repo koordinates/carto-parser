@@ -15,6 +15,8 @@
 #include <mml_parser.hpp>
 #include <mss_parser.hpp>
 
+#include <intermediate/mss_parser.hpp>
+
 #include <mapnik/save_map.hpp>
 
 #include <boost/program_options.hpp>
@@ -91,6 +93,11 @@ int main(int argc, char **argv) {
             carto::mss_parser parser = carto::load_mss(input_file, false);
             carto::style_env env;
             parser.parse_stylesheet(m, env);
+
+            carto::intermediate::mss_parser p = carto::intermediate::mss_parser::load(input_file, false);
+            carto::style_env env2;
+            carto::intermediate::stylesheet s;
+            p.parse_stylesheet(s, env2);
         }
         
         std::string output = mapnik::save_map_to_string(m,false);

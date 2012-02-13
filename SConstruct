@@ -30,7 +30,7 @@ env = Environment(
   LINKCOMSTR='%sld: $TARGET%s' % (colors['yellow'], colors['end']),
   SHLINKCOMSTR='%sld: $TARGET%s' % (colors['yellow'], colors['end']),
 
-  tools=["default"],
+  tools=['default'],
   ENV = {'PATH' : os.environ['PATH']}
 )
 

@@ -12,15 +12,9 @@
 
 namespace carto { namespace intermediate {
 
-class parser_error : std::exception {
-private:
-    std::string msg;
+class parser_error : public std::runtime_error {
 public:
-    parser_error(std::string const& msg) : msg(msg) { }
-    parser_error(const char *msg) : msg(msg) { }
-
-    const char *what() const throw () { return msg.c_str(); }
-
+    parser_error(std::string const& msg) : std::runtime_error(msg) { }
     virtual ~parser_error() throw() { }
 };
 

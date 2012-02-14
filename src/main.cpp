@@ -15,7 +15,9 @@
 #include <mml_parser.hpp>
 #include <mss_parser.hpp>
 
+#include <intermediate/dumper.hpp>
 #include <intermediate/mss_parser.hpp>
+#include <intermediate/mss_to_mapnik.hpp>
 
 #include <mapnik/save_map.hpp>
 
@@ -79,7 +81,6 @@ int main(int argc, char **argv) {
     }
 
 
-    
     try {
         mapnik::Map m(800,600);
         
@@ -90,14 +91,22 @@ int main(int argc, char **argv) {
         }
         else if (boost::algorithm::ends_with(input_file,".mss")) 
         {
+#ifdef USE_OLD_PARSER
             carto::mss_parser parser = carto::load_mss(input_file, false);
             carto::style_env env;
             parser.parse_stylesheet(m, env);
-
+#else
             carto::intermediate::mss_parser p = carto::intermediate::mss_parser::load(input_file, false);
             carto::style_env env2;
             carto::intermediate::stylesheet s;
             p.parse_stylesheet(s, env2);
+
+            carto::intermediate::dumper dumper(std::clog);
+            dumper.visit(s);
+
+            carto::intermediate::mss_to_mapnik gen(m);
+            gen.visit(s);
+#endif
         }
         
         std::string output = mapnik::save_map_to_string(m,false);
@@ -115,13 +124,11 @@ int main(int argc, char **argv) {
             file.close();
         }
             
-            
-       
+           
     } catch (std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
     } catch(...) {
         std::cerr << "Error: Unknown error\n";
     }
-    
     return 0;
 }

@@ -28,8 +28,18 @@ inline source_location mss_parser::get_location(utree const& ut) {
     return tree.annotations()[ut.tag()].first;
 }
 
-void mss_parser::parse_stylesheet(stylesheet &styl,
-                                               style_env &env) {
+struct filter_diff_pred {
+    rule::filters_type const& current;
+
+    filter_diff_pred(rule::filters_type const& current)
+      : current(current) { }
+
+    bool operator()(filter_selector const& f) {
+        return std::find(current.begin(), current.end(), f) != current.end();
+    }
+};
+
+void mss_parser::parse_stylesheet(stylesheet &styl, style_env &env) {
     using spirit::utree_type;
 
     utree const& root_node = tree.ast();
@@ -59,6 +69,38 @@ void mss_parser::parse_stylesheet(stylesheet &styl,
             }
         }
      }
+
+    // now, cascade!
+    for(stylesheet::rules_type::reverse_iterator it = styl.rules.rbegin();
+        it != styl.rules.rend();
+        ++it) {
+        for(stylesheet::rules_type::const_reverse_iterator lit(it);
+            lit != styl.rules.rend();
+            ++lit) {
+            // inheritability tests
+            if(
+                (!lit->name_selector || lit->name_selector == it->name_selector) &&
+                (!lit->attachment_selector || lit->attachment_selector == it->attachment_selector)
+            ) {
+                std::vector<filter_selector> filter_diff;
+                std::copy(lit->filters.begin(), lit->filters.end(),
+                          std::back_inserter(filter_diff));
+
+                std::remove_if(filter_diff.begin(), filter_diff.end(),
+                               filter_diff_pred(it->filters));
+
+                if(!filter_diff.size())
+                    // OH MY GOD WHY ARE YOU DOING THIS YOU CAN'T REMOVE CONST
+                    // LIKE THAT
+                    // (really, though, it's safe. trust me. we aren't
+                    // fiddling with the specificity)
+                    const_cast<rule::attributes_type *>(&it->attrs)->insert(
+                        lit->attrs.begin(),
+                        lit->attrs.end()
+                    );
+            }
+        }
+    }
 }
 
 void mss_parser::parse_style(
@@ -88,11 +130,11 @@ void mss_parser::parse_style(
             switch (name[0])
             {
                 case '#':
-                    rule.name_selector = id_selector(as<std::string>(uattach));
+                    rule.name_selector = id_selector(as<std::string>(uname).substr(1));
                     break;
 
                 case '.':
-                    rule.name_selector = class_selector(as<std::string>(uattach));
+                    rule.name_selector = class_selector(as<std::string>(uname).substr(1));
                     break;
 
                 default:
@@ -140,7 +182,7 @@ void mss_parser::parse_style(
             }
         }
 
-        styl.rules[rule.specificity()] = rule;
+        styl.rules.insert(rule);
     }
 }
 
@@ -154,17 +196,16 @@ void mss_parser::parse_filter(
                           
     for (; it != end; ++it)
     {
-        utree::const_iterator fit = it->begin(),
-                              fend = it->end();
+        BOOST_ASSERT(it->size()==2);
 
-        utree key_utree = *fit; ++fit;
-        utree value = *fit; ++fit;
+        utree key_utree = it->front();
+        utree value = it->back();
 
-        std::string key = as<std::string>(key_utree);
+        std::string key = as<std::string>(key_utree.front());
 
         filter_selector::predicate pred;
 
-        switch(get_node_type(node))
+        switch(get_node_type(*it))
         {
             case filter_eq:
                 pred = filter_selector::pred_eq;
@@ -192,7 +233,7 @@ void mss_parser::parse_filter(
         }
 
         filter_selector filt(key, pred, value);
-        rule.filters.push_back(filt);
+        rule.filters.insert(filt);
     }
 }
 
@@ -237,8 +278,7 @@ void mss_parser::parse_attribute(stylesheet &map,
     std::string key = as<std::string>(node.front());
     utree value = parse_value(node.back(), env);
 
-    attribute attr(key, value);
-    rule.attrs.push_back(attr);
+    rule.attrs[key] = value;
 }
 
 void mss_parser::parse_variable(utree const& node,

@@ -450,7 +450,7 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
             case filter_selector::pred_lt:
                 if(it->key == "zoom") {
                     int b = as<int>(it->value);
-                    rule_->set_max_scale(zoom_ranges[b - 1]);
+                    rule_->set_min_scale(zoom_ranges[b - 1]);
                     continue;
                 } else {
                     foss << "[" << it->key << "]<" << stringify_filter_value(it->value);
@@ -460,7 +460,7 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
             case filter_selector::pred_le:
                 if(it->key == "zoom") {
                     int b = as<int>(it->value);
-                    rule_->set_max_scale(zoom_ranges[b]);
+                    rule_->set_min_scale(zoom_ranges[b]);
                     continue;
                 } else {
                     foss << "[" << it->key << "]<=" << stringify_filter_value(it->value);
@@ -470,7 +470,7 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
             case filter_selector::pred_gt:
                 if(it->key == "zoom") {
                     int b = as<int>(it->value);
-                    rule_->set_min_scale(zoom_ranges[b]);
+                    rule_->set_max_scale(zoom_ranges[b + 1]);
                     continue;
                 } else {
                     foss << "[" << it->key << "]>" << stringify_filter_value(it->value);
@@ -480,7 +480,7 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
             case filter_selector::pred_ge:
                 if(it->key == "zoom") {
                     int b = as<int>(it->value);
-                    rule_->set_min_scale(zoom_ranges[b + 1]);
+                    rule_->set_max_scale(zoom_ranges[b]);
                     continue;
                 } else {
                     foss << "[" << it->key << "]>=" << stringify_filter_value(it->value);
@@ -542,35 +542,38 @@ void mss_to_mapnik::visit(rule const& rule) {
     rule_ = mapnik::rule();
     emit_filters(rule.filters);
 
-    for(rule::attributes_type::const_iterator it = rule.attrs.begin();
-        it != rule.attrs.end();
-        ++it) {
-        std::string key = it->first;
-        if (key.substr(0,8) == "polygon-")
-            emit_polygon(it->first, it->second);
-        else if (key.substr(0,5) == "line-")  
-            emit_line(it->first, it->second);
-        else if (key.substr(0,7) == "marker-")
-            emit_marker(it->first, it->second);
-        else if (key.substr(0,6) == "point-")
-            emit_point(it->first, it->second);
-        else if (key.substr(0,13)== "line-pattern-")
-            emit_line_pattern(it->first, it->second);
-        else if (key.substr(0,16)== "polygon-pattern-") 
-            emit_polygon_pattern(it->first, it->second);
-        else if (key.substr(0,7) == "raster-")
-            emit_raster(it->first, it->second);
-        else if (key.substr(0,9) == "building-")
-            emit_building(it->first, it->second);
-        else if (key.substr(0,5) == "text-")
-            emit_text(it->first, it->second);
-        else if (key.substr(0,7) == "shield-")
-            emit_shield(it->first, it->second);
-        else 
-            throw generation_error("Unknown key: " + key);
-    }
+    if(rule.attrs.size())
+    {
+        for(rule::attributes_type::const_iterator it = rule.attrs.begin();
+            it != rule.attrs.end();
+            ++it) {
+            std::string key = it->first;
+            if (key.substr(0,8) == "polygon-")
+                emit_polygon(it->first, it->second);
+            else if (key.substr(0,5) == "line-")  
+                emit_line(it->first, it->second);
+            else if (key.substr(0,7) == "marker-")
+                emit_marker(it->first, it->second);
+            else if (key.substr(0,6) == "point-")
+                emit_point(it->first, it->second);
+            else if (key.substr(0,13)== "line-pattern-")
+                emit_line_pattern(it->first, it->second);
+            else if (key.substr(0,16)== "polygon-pattern-") 
+                emit_polygon_pattern(it->first, it->second);
+            else if (key.substr(0,7) == "raster-")
+                emit_raster(it->first, it->second);
+            else if (key.substr(0,9) == "building-")
+                emit_building(it->first, it->second);
+            else if (key.substr(0,5) == "text-")
+                emit_text(it->first, it->second);
+            else if (key.substr(0,7) == "shield-")
+                emit_shield(it->first, it->second);
+            else 
+                throw generation_error("Unknown key: " + key);
+        }
 
-    (*style_it).second.add_rule(*rule_);
+        (*style_it).second.add_rule(*rule_);
+    }
 }
 
 template<>

@@ -44,10 +44,12 @@ struct mss_parser {
     }
     
     int get_node_type(utree const& ut);
-    
+
     source_location get_location(utree const& ut);
 
     void parse_stylesheet(stylesheet &styl, style_env& env);
+
+    void cascade(stylesheet &styl);
 
     void parse_style(stylesheet &styl, utree const& node,
                      style_env const& parent_env,

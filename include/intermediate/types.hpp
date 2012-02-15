@@ -50,6 +50,10 @@ public:
         return "." + name;
     }
 
+    inline bool operator==(id_selector const& rhs) const {
+        return false;
+    }
+
     inline bool operator==(class_selector const& rhs) const {
         return name == rhs.name;
     }
@@ -69,6 +73,10 @@ public:
 
     inline bool operator==(id_selector const& rhs) const {
         return name == rhs.name;
+    }
+
+    inline bool operator==(class_selector const& rhs) const {
+        return false;
     }
 };
 
@@ -175,17 +183,19 @@ private:
     };
 
 public:
-    boost::optional<name_selector> name_selector;
+    typedef std::vector<name_selector> names_type;
+    names_type names;
+
     typedef std::multiset<filter_selector, filter_selector::comparator> filters_type;
     filters_type filters;
+
     boost::optional<attachment_selector> attachment_selector;
 
     typedef std::map<std::string, utree> attributes_type;
     attributes_type attrs;
 
-    rule(boost::optional<carto::intermediate::name_selector> name_selector = boost::none,
-         boost::optional<carto::intermediate::attachment_selector> attachment_selector = boost::none)
-      : name_selector(name_selector),
+    rule(boost::optional<carto::intermediate::attachment_selector> attachment_selector = boost::none)
+      : names(),
         filters(),
         attachment_selector(attachment_selector),
         attrs() { }
@@ -209,9 +219,7 @@ public:
      * See: http://www.w3.org/TR/css3-selectors/#specificity
      */
     inline unsigned int specificity() const {
-        return (name_selector ? 0xff0000u : 0x000000u) |
-               // clamp the max value at 0xff so we don't mess up the higher
-               // bits
+        return (names.size() << 16) |
                ((filters.size() > 0xff ? 0xff : filters.size()) << 8) |
                (attachment_selector ? 0x0000ffu : 0x000000u);
     }
@@ -223,7 +231,12 @@ public:
     const std::string get_partial_name() const {
         std::stringstream oss;
 
-        if(name_selector) boost::apply_visitor(selector_visitor(oss), *name_selector);
+        for(names_type::const_iterator it = names.begin();
+            it != names.end();
+            ++it) {
+            boost::apply_visitor(selector_visitor(oss), *it);
+        }
+
         if(attachment_selector) oss << attachment_selector->get_selector_name();
 
         return oss.str();
@@ -232,7 +245,11 @@ public:
     const std::string get_selector_name() const {
         std::stringstream oss;
 
-        if(name_selector) boost::apply_visitor(selector_visitor(oss), *name_selector);
+        for(names_type::const_iterator it = names.begin();
+            it != names.end();
+            ++it) {
+            boost::apply_visitor(selector_visitor(oss), *it);
+        }
 
         for(filters_type::const_iterator it = filters.begin();
             it != filters.end();
@@ -254,10 +271,13 @@ public:
 
 class stylesheet {
 public:
-    stylesheet() : rules() { }
+    stylesheet() : rules(), map_style() { }
 
     typedef std::multiset<rule, rule::specificity_comparator> rules_type;
     rules_type rules;
+
+    typedef std::map<std::string, utree> map_style_type;
+    map_style_type map_style;
 
     inline void accept(visitor &visitor) const {
         visitor.visit(*this);

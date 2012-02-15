@@ -70,7 +70,10 @@ void mss_parser::parse_stylesheet(stylesheet &styl, style_env &env) {
         }
      }
 
-    // now, cascade!
+    cascade(styl);
+}
+
+void mss_parser::cascade(stylesheet &styl) {
     for(stylesheet::rules_type::reverse_iterator it = styl.rules.rbegin();
         it != styl.rules.rend();
         ++it) {
@@ -78,18 +81,25 @@ void mss_parser::parse_stylesheet(stylesheet &styl, style_env &env) {
             lit != styl.rules.rend();
             ++lit) {
             // inheritability tests
+            rule::names_type::const_iterator lnit = lit->names.begin();
+            rule::names_type::const_iterator nit = it->names.begin();
+
+            // search through all the named filters until either we don't have
+            // any more or one is less specific than the other
+            while(lnit != lit->names.end() && nit != it->names.end()) {
+                if(!(*lnit++ == *nit++)) break;
+            }
+
             if(
-                (!lit->name_selector || lit->name_selector == it->name_selector) &&
+                lnit == lit->names.end() &&
                 (!lit->attachment_selector || lit->attachment_selector == it->attachment_selector)
             ) {
                 std::vector<filter_selector> filter_diff;
-                std::copy(lit->filters.begin(), lit->filters.end(),
+
+                std::copy(it->filters.begin(), it->filters.end(),
                           std::back_inserter(filter_diff));
 
-                std::remove_if(filter_diff.begin(), filter_diff.end(),
-                               filter_diff_pred(it->filters));
-
-                if(!filter_diff.size())
+/*              if(!rule::solve_filters(filter_diff).size()) {
                     // OH MY GOD WHY ARE YOU DOING THIS YOU CAN'T REMOVE CONST
                     // LIKE THAT
                     // (really, though, it's safe. trust me. we aren't
@@ -98,6 +108,7 @@ void mss_parser::parse_stylesheet(stylesheet &styl, style_env &env) {
                         lit->attrs.begin(),
                         lit->attrs.end()
                     );
+                }*/
             }
         }
     }
@@ -130,11 +141,11 @@ void mss_parser::parse_style(
             switch (name[0])
             {
                 case '#':
-                    rule.name_selector = id_selector(as<std::string>(uname).substr(1));
+                    rule.names.push_back(id_selector(as<std::string>(uname).substr(1)));
                     break;
 
                 case '.':
-                    rule.name_selector = class_selector(as<std::string>(uname).substr(1));
+                    rule.names.push_back(class_selector(as<std::string>(uname).substr(1)));
                     break;
 
                 default:
@@ -289,9 +300,16 @@ void mss_parser::parse_variable(utree const& node,
 }
 
 void mss_parser::parse_map_style(stylesheet &styl,
-                                              utree const& node,
-                                              style_env& env) {
-    throw parser_error("map style currently unsupported");
+                                 utree const& node,
+                                 style_env& env) {
+    for (utree::const_iterator it = node.begin(); it != node.end(); ++it) {
+        BOOST_ASSERT((*it).size()==2);
+
+        std::string key = as<std::string>(it->front());
+        utree const& value = parse_value(it->back(), env);
+
+        styl.map_style[key] = value;
+    }
 }
 
 mss_parser mss_parser::load(std::string filename, bool strict) {

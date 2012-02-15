@@ -56,6 +56,9 @@ namespace carto { namespace intermediate {
         void emit_text(std::string const&, utree const&);
         void emit_shield(std::string const&, utree const&);
 
+        void emit_map_style(stylesheet::map_style_type const&);
+        void emit_filters(rule::filters_type const&);
+
     public:
         explicit mss_to_mapnik(mapnik::Map &m);
 

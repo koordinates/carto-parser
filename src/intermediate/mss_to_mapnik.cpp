@@ -1,6 +1,7 @@
 #include <intermediate/mss_to_mapnik.hpp>
 
 #include <utility/utree.hpp>
+#include <utility/version.hpp>
 
 #include <mapnik/map.hpp>
 #include <mapnik/config_error.hpp>
@@ -20,6 +21,14 @@
 #include <agg_trans_affine.h>
 
 namespace carto { namespace intermediate {
+
+static 
+double const zoom_ranges[] = { 1000000000, 500000000, 200000000, 100000000,
+                                 50000000,  25000000,  12500000,   6500000,
+                                  3000000,   1500000,    750000,    400000,
+                                   200000,    100000,     50000,     25000,
+                                    12500,      5000,      2500,      1500,
+                                      750,       500,       250,       100};
 
 using carto::detail::as;
 
@@ -355,7 +364,158 @@ void mss_to_mapnik::emit_shield(std::string const& key, utree const& value) {
     }
 }
 
+std::string stringify_filter_value(utree const& value) {
+    std::stringstream oss;
+    if (value.which() == boost::spirit::utree_type::list_type) {
+        utree::const_iterator it = value.begin(), end = value.end();
+        for (; it != end; ++it) 
+            oss << stringify_filter_value(*it);
+    } else {
+        oss << as<std::string>(value);
+    }
+    return oss.str();
+}
+
+void mss_to_mapnik::emit_map_style(stylesheet::map_style_type const& map_style) {
+    mapnik::parameters extra_attr;
+    bool relative_to_xml = true;
+
+    for(stylesheet::map_style_type::const_iterator it = map_style.begin();
+        it != map_style.end();
+        ++it) {
+        std::string const& key = it->first;
+        utree const& value = it->second;
+        std::string base = "";
+
+        if (key == "srs") {
+            map_.set_srs(as<std::string>(value));
+        } else if (key == "background-color") {
+            BOOST_ASSERT((carto_node_type) get_node_type(value) == carto_color);
+            map_.set_background(as<mapnik::color>(value));
+        } else if (key == "background-image") {
+            map_.set_background_image(base+as<std::string>(value));
+        } else if (key == "buffer-size") {
+            map_.set_buffer_size(round(as<double>(value)));
+        } else if (key == "base") {
+            base = as<std::string>(value); // FIXME - not sure this is correct
+        } else if (key == "paths-from-xml") {
+            relative_to_xml = as<bool>(value);
+        } else if (key == "minimum-version") {
+            std::string ver_str = as<std::string>(value);
+            extra_attr["minimum-version"] = ver_str;
+            
+            int min_ver = version_from_string(ver_str);
+            
+            if (min_ver == -1) {
+                throw mapnik::config_error(std::string("Invalid version string ") + ver_str);
+            } else if (min_ver > MAPNIK_VERSION) {
+                throw mapnik::config_error(std::string("This map uses features only present in Mapnik version ") + ver_str + " and newer");
+            }
+        } 
+        else if (key == "font-directory") {
+            std::string dir = base+as<std::string>(value);
+            extra_attr["font-directory"] = dir;
+            //freetype_engine::register_fonts( ensure_relative_to_xml(dir), false);
+        } else {
+            throw generation_error("Unknown key: " + key);
+        }
+
+    }
+
+    map_.set_extra_attributes(extra_attr);
+}
+
+void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
+    if(!filters.size()) return;
+
+    std::vector<std::string> emit_filters;
+
+    for(rule::filters_type::const_iterator it = filters.begin();
+        it != filters.end();
+        ++it) {
+        std::stringstream foss;
+
+        switch(it->pred) {
+            case filter_selector::pred_eq:
+                if(it->key == "zoom") {
+                    int b = as<int>(it->value);
+                    rule_->set_min_scale(zoom_ranges[b + 1]);
+                    rule_->set_max_scale(zoom_ranges[b]);
+                    continue;
+                } else {
+                    foss << "[" << it->key << "]=" << stringify_filter_value(it->value);
+                }
+                break;
+
+            case filter_selector::pred_lt:
+                if(it->key == "zoom") {
+                    int b = as<int>(it->value);
+                    rule_->set_max_scale(zoom_ranges[b - 1]);
+                    continue;
+                } else {
+                    foss << "[" << it->key << "]<" << stringify_filter_value(it->value);
+                }
+                break;
+
+            case filter_selector::pred_le:
+                if(it->key == "zoom") {
+                    int b = as<int>(it->value);
+                    rule_->set_max_scale(zoom_ranges[b]);
+                    continue;
+                } else {
+                    foss << "[" << it->key << "]<=" << stringify_filter_value(it->value);
+                }
+                break;
+
+            case filter_selector::pred_gt:
+                if(it->key == "zoom") {
+                    int b = as<int>(it->value);
+                    rule_->set_min_scale(zoom_ranges[b]);
+                    continue;
+                } else {
+                    foss << "[" << it->key << "]>" << stringify_filter_value(it->value);
+                }
+                break;
+
+            case filter_selector::pred_ge:
+                if(it->key == "zoom") {
+                    int b = as<int>(it->value);
+                    rule_->set_min_scale(zoom_ranges[b + 1]);
+                    continue;
+                } else {
+                    foss << "[" << it->key << "]>=" << stringify_filter_value(it->value);
+                }
+                break;
+
+            case filter_selector::pred_neq:
+                if(it->key == "zoom") {
+                    throw generation_error("!= unsupported for zoom");
+                } else {
+                    foss <<"[" << it->key << "]!=" << stringify_filter_value(it->value);
+                }
+                break;
+
+            case filter_selector::pred_unknown:
+                throw generation_error("bad predicate");
+                
+        }
+
+        if(!foss.str().empty())
+            emit_filters.push_back(foss.str());
+    }
+
+    if(!emit_filters.size()) return;
+
+    std::stringstream oss;
+    oss << "(" << boost::algorithm::join(emit_filters, ") and (") << ")";
+
+    mapnik::expression_ptr expr = mapnik::parse_expression(oss.str(), "utf8");
+    rule_->set_filter(expr);
+}
+
 void mss_to_mapnik::visit(stylesheet const& styl) {
+    emit_map_style(styl.map_style);
+
     for(stylesheet::rules_type::const_iterator it = styl.rules.begin();
         it != styl.rules.end();
         ++it) {
@@ -366,20 +526,21 @@ void mss_to_mapnik::visit(stylesheet const& styl) {
 void mss_to_mapnik::visit(rule const& rule) {
     std::string name = rule.get_partial_name();
 
-    mapnik::Map::style_iterator map_it, map_end;
+    mapnik::Map::style_iterator style_it, style_end;
 
-    map_it  = map_.styles().find(name);                           
-    map_end = map_.styles().end();
+    style_it  = map_.styles().find(name);                           
+    style_end = map_.styles().end();
 
-    if (map_it == map_end) {
+    if (style_it == style_end) {
         mapnik::feature_type_style new_style;
         new_style.set_filter_mode(mapnik::FILTER_FIRST);
 
         map_.insert_style(name, new_style);
-        map_it = map_.styles().find(name);
+        style_it = map_.styles().find(name);
     }
 
     rule_ = mapnik::rule();
+    emit_filters(rule.filters);
 
     for(rule::attributes_type::const_iterator it = rule.attrs.begin();
         it != rule.attrs.end();
@@ -409,7 +570,7 @@ void mss_to_mapnik::visit(rule const& rule) {
             throw generation_error("Unknown key: " + key);
     }
 
-    (*map_it).second.add_rule(*rule_);
+    (*style_it).second.add_rule(*rule_);
 }
 
 template<>

@@ -94,12 +94,130 @@ void mss_parser::cascade(stylesheet &styl) {
                 lnit == lit->names.end() &&
                 (!lit->attachment_selector || lit->attachment_selector == it->attachment_selector)
             ) {
-                std::vector<filter_selector> filter_diff;
+                rule::filters_type const& lhs_filters = it->filters;
+                rule::filters_type const& rhs_filters = lit->filters;
 
-                std::copy(it->filters.begin(), it->filters.end(),
-                          std::back_inserter(filter_diff));
+                bool fulfillable = true;
 
-/*              if(!rule::solve_filters(filter_diff).size()) {
+                rule::filters_type::iterator lfit = lhs_filters.begin();
+                rule::filters_type::iterator rfit = rhs_filters.begin();
+
+                typedef std::pair<double /* stop location */,
+                                  bool /* open = true, closed = false */> range_stop;
+                typedef std::pair<range_stop, range_stop> range;
+
+                using std::make_pair;
+
+                for(; lfit != lhs_filters.end() && rfit != rhs_filters.end();)
+                {
+                    // advance the right iterator if it's not a match for the
+                    // left iterator
+                    if(lfit->key.compare(rfit->key) < 0) {
+                        rfit++;
+                        continue;
+                    }
+
+                    // advance the left iterator if it's not a match for the
+                    // right iterator
+                    if(rfit->key.compare(lfit->key) < 0) {
+                        lfit++;
+                        continue;
+                    }
+
+                    if(lfit->value.which() != boost::spirit::utree_type::double_type ||
+                       rfit->value.which() != boost::spirit::utree_type::double_type) {
+                        if(lfit->pred != filter_selector::pred_eq ||
+                           rfit->pred != filter_selector::pred_eq) {
+                            throw parser_error("can only use equality comparison on non-numeric values");
+                        }
+
+                        if(lfit->value != rfit->value) fulfillable = false;
+
+                        lfit++;
+                        rfit++;
+                    }
+
+                    range left_range(
+                        make_pair(-std::numeric_limits<double>::infinity(), true),
+                        make_pair(std::numeric_limits<double>::infinity(), true)
+                    );
+
+                    range right_range(
+                        make_pair(-std::numeric_limits<double>::infinity(), true),
+                        make_pair(std::numeric_limits<double>::infinity(), true)
+                    );
+
+                    while(lfit != lhs_filters.end() &&
+                          rfit != rhs_filters.end() &&
+                          lfit->key == rfit->key) {
+                        switch(lfit->pred) {
+                            case filter_selector::pred_lt:
+                                left_range.second = make_pair(as<double>(lfit->value), true);
+                                break;
+
+                            case filter_selector::pred_le:
+                                left_range.second = make_pair(as<double>(lfit->value), false);
+                                break;
+
+                            case filter_selector::pred_gt:
+                                left_range.first = make_pair(as<double>(lfit->value), true);
+                                break;
+
+                            case filter_selector::pred_ge:
+                                left_range.first = make_pair(as<double>(lfit->value), false);
+                                break;
+
+                            case filter_selector::pred_eq:
+                                left_range = make_pair(
+                                    make_pair(as<double>(lfit->value), true),
+                                    make_pair(as<double>(lfit->value), true)
+                                );
+                                break;
+
+                            default:
+                                throw parser_error("could not generate left range");
+                        }
+
+                        switch(rfit->pred) {
+                            case filter_selector::pred_lt:
+                                right_range.second = make_pair(as<double>(rfit->value), true);
+                                break;
+
+                            case filter_selector::pred_le:
+                                right_range.second = make_pair(as<double>(rfit->value), false);
+                                break;
+
+                            case filter_selector::pred_gt:
+                                right_range.first = make_pair(as<double>(rfit->value), true);
+                                break;
+
+                            case filter_selector::pred_ge:
+                                right_range.first = make_pair(as<double>(rfit->value), false);
+                                break;
+
+                            case filter_selector::pred_eq:
+                                right_range = make_pair(
+                                    make_pair(as<double>(rfit->value), true),
+                                    make_pair(as<double>(rfit->value), true)
+                                );
+                                break;
+
+                            default:
+                                throw parser_error("could not generate right range");
+                        }
+
+                        lfit++;
+                        rfit++;
+                    }
+
+                    // at this point, we should have both left_range and
+                    // right_range
+                    fulfillable &=
+                        (left_range.first.first - right_range.first.first) >= 0 &&
+                        (left_range.second.first - right_range.second.first) <= 0;
+                }
+
+                if(fulfillable) {
                     // OH MY GOD WHY ARE YOU DOING THIS YOU CAN'T REMOVE CONST
                     // LIKE THAT
                     // (really, though, it's safe. trust me. we aren't
@@ -108,7 +226,7 @@ void mss_parser::cascade(stylesheet &styl) {
                         lit->attrs.begin(),
                         lit->attrs.end()
                     );
-                }*/
+                }
             }
         }
     }
@@ -218,9 +336,6 @@ void mss_parser::parse_filter(
 
         switch(get_node_type(*it))
         {
-            case filter_eq:
-                pred = filter_selector::pred_eq;
-                break;
             case filter_lt:
                 pred = filter_selector::pred_lt;
                 break;
@@ -232,6 +347,9 @@ void mss_parser::parse_filter(
                 break;
             case filter_ge:
                 pred = filter_selector::pred_ge;
+                break;
+            case filter_eq:
+                pred = filter_selector::pred_eq;
                 break;
             case filter_neq:
                 pred = filter_selector::pred_neq;

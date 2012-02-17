@@ -41,6 +41,7 @@
 #include <utility/version.hpp>
 #include <utility/round.hpp>
 
+#include <intermediate/dumper.hpp>
 
 namespace carto {
 
@@ -48,7 +49,7 @@ using mapnik::config_error;
 
 mss_parser::mss_parser(parse_tree const& pt, bool strict_, std::string const& path_)
   : intermediate_parser(carto::intermediate::mss_parser(pt, strict_, path_)) { }
-  
+
 mss_parser::mss_parser(std::string const& in, bool strict_, std::string const& path_)
   : intermediate_parser(carto::intermediate::mss_parser(in, strict_, path_)) { }
 
@@ -57,6 +58,7 @@ void mss_parser::parse_stylesheet(mapnik::Map& map, style_env& env)
     carto::intermediate::stylesheet styl;
     intermediate_parser.parse_stylesheet(styl, env);
 
+    carto::intermediate::dumper(std::clog).visit(styl);
     carto::intermediate::mss_to_mapnik(map).visit(styl);
 }
 

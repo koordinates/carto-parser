@@ -85,13 +85,13 @@ typedef boost::variant<class_selector, id_selector> name_selector;
 class filter_selector : public selector {
 public:
     enum predicate {
-        pred_unknown,   // ?
-        pred_eq,        // =
-        pred_lt,        // <
-        pred_le,        // <=
-        pred_gt,        // >
-        pred_ge,        // >=
-        pred_neq        // !=
+        pred_unknown    = 0,    // ?
+        pred_lt         = 1,    // <
+        pred_le         = 2,    // <=
+        pred_gt         = 3,    // >
+        pred_ge         = 4,    // >=
+        pred_neq        = 5,    // !=
+        pred_eq         = 6     // =
     };
 
     filter_selector(std::string k, predicate p, utree v) :
@@ -127,6 +127,7 @@ public:
                 break;
             case pred_neq:
                 oss << "!=";
+                break;
             case pred_unknown:
                 oss << "?";
                 break;
@@ -143,7 +144,11 @@ public:
 
     struct comparator {
         bool operator()(filter_selector const &lhs, filter_selector const& rhs) {
-            return lhs.key.compare(rhs.key) ? lhs.pred < rhs.pred : true;
+            int cmp = lhs.key.compare(rhs.key);
+            if(cmp) return cmp < 0;
+
+            if(lhs.pred < rhs.pred) return true;
+            return lhs.value < rhs.value;
         }
     };
 };
@@ -186,7 +191,7 @@ public:
     typedef std::vector<name_selector> names_type;
     names_type names;
 
-    typedef std::multiset<filter_selector, filter_selector::comparator> filters_type;
+    typedef std::set<filter_selector, filter_selector::comparator> filters_type;
     filters_type filters;
 
     boost::optional<attachment_selector> attachment_selector;
@@ -282,6 +287,16 @@ public:
     inline void accept(visitor &visitor) const {
         visitor.visit(*this);
     }
+
+    struct filter_removal_predicate {
+        std::string key;
+
+        filter_removal_predicate(std::string key) : key(key) { }
+
+        bool operator()(filter_selector const& filter) {
+            return filter.key == key;
+        }
+    };
 };
 
 } }

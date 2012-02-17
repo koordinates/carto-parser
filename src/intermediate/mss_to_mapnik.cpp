@@ -364,7 +364,7 @@ void mss_to_mapnik::emit_shield(std::string const& key, utree const& value) {
     }
 }
 
-std::string stringify_filter_value(utree const& value) {
+static std::string stringify_filter_value(utree const& value) {
     std::stringstream oss;
     if (value.which() == boost::spirit::utree_type::list_type) {
         utree::const_iterator it = value.begin(), end = value.end();
@@ -443,7 +443,8 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
                     rule_->set_max_scale(zoom_ranges[b]);
                     continue;
                 } else {
-                    foss << "[" << it->key << "]=" << stringify_filter_value(it->value);
+                    foss << "[" << it->key << "]="
+                         << stringify_filter_value(it->value);
                 }
                 break;
 
@@ -453,7 +454,8 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
                     rule_->set_min_scale(zoom_ranges[b - 1]);
                     continue;
                 } else {
-                    foss << "[" << it->key << "]<" << stringify_filter_value(it->value);
+                    foss << "[" << it->key << "]<"
+                         << stringify_filter_value(it->value);
                 }
                 break;
 
@@ -463,7 +465,8 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
                     rule_->set_min_scale(zoom_ranges[b]);
                     continue;
                 } else {
-                    foss << "[" << it->key << "]<=" << stringify_filter_value(it->value);
+                    foss << "[" << it->key << "]<="
+                         << stringify_filter_value(it->value);
                 }
                 break;
 
@@ -473,7 +476,8 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
                     rule_->set_max_scale(zoom_ranges[b + 1]);
                     continue;
                 } else {
-                    foss << "[" << it->key << "]>" << stringify_filter_value(it->value);
+                    foss << "[" << it->key << "]>"
+                         << stringify_filter_value(it->value);
                 }
                 break;
 
@@ -483,7 +487,8 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
                     rule_->set_max_scale(zoom_ranges[b]);
                     continue;
                 } else {
-                    foss << "[" << it->key << "]>=" << stringify_filter_value(it->value);
+                    foss << "[" << it->key << "]>="
+                         << stringify_filter_value(it->value);
                 }
                 break;
 
@@ -491,11 +496,13 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
                 if(it->key == "zoom") {
                     throw generation_error("!= unsupported for zoom");
                 } else {
-                    foss <<"[" << it->key << "]!=" << stringify_filter_value(it->value);
+                    foss << "[" << it->key << "]!="
+                         << stringify_filter_value(it->value);
                 }
                 break;
 
             case filter_selector::pred_unknown:
+            default:
                 throw generation_error("bad predicate");
                 
         }
@@ -516,8 +523,8 @@ void mss_to_mapnik::emit_filters(rule::filters_type const& filters) {
 void mss_to_mapnik::visit(stylesheet const& styl) {
     emit_map_style(styl.map_style);
 
-    for(stylesheet::rules_type::const_iterator it = styl.rules.begin();
-        it != styl.rules.end();
+    for(stylesheet::rules_type::const_reverse_iterator it = styl.rules.rbegin();
+        it != styl.rules.rend();
         ++it) {
         visit(*it);
     }
